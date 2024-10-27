@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>税務調査アドベンチャー</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=M+PLUS+1p:wght@400&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive, 'M PLUS 1p', sans-serif; /* レトロフォントと日本語フォントを適用 */
+            background-color: #000;
+            color: #33FF33;
+            text-align: center;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .game-container {
+            display: flex;
+            height: 100%;
+        }
+        .data-display {
+            flex: 1;
+            background-color: #222;
+            padding: 20px;
+            color: #FFCC33;
+            font-size: 24px;
+            overflow-y: auto;
+        }
+        .game-content {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            color: #33FF33;
+        }
+        .scene-image img {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            width: 100%;
+            height: auto; /* heightをautoにすることで縦の圧縮を防ぎます */
+            max-height: 600px; /* 高さの最大値を設定します */
+            object-fit: contain; /* containを使用して画像のアスペクト比を維持します */
+            border: 2px solid #33FF33;
+            margin-bottom: 10px;
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 10px;
+            color: #FFCC33;
+            font-size: 20px;
+        }
+        .text-box {
+            background-color: #111;
+            color: #FFF;
+            padding: 15px;
+            border: 2px solid #33FF33;
+            margin-bottom: 15px;
+            font-size: 20px;
+            text-align: left;
+            line-height: 1.6;
+            flex-grow: 1;
+        }
+        .choices .choice {
+            padding: 8px;
+            margin: 5px 0;
+            background-color: #444;
+            color: #FFF;
+            border: 1px solid #33FF33;
+            cursor: pointer;
+            font-size: 20px;
+        }
+        .choices .choice:hover {
+            background-color: #555;
+        }
+        #csvFileInput {
+            display: none;
+        }
+        .upload-label {
+            color: #FFCC33;
+            cursor: pointer;
+            font-size: 20px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="data-display" id="dataDisplay">
+            <h2>読み込んだデータ:</h2>
+            <label for="csvFileInput" class="upload-label">CSVファイルをアップロード</label>
+            <input type="file" id="csvFileInput" accept=".csv">
+            <div id="dataDetails"></div>
+        </div>
+
+        <div class="game-content">
+            <div class="scene-image" id="sceneImage">
+                <img src="/api/placeholder/800/400" alt="scene">
+            </div>
+
+            <div class="status-bar">
+                <div>信頼度: <span id="trustValue">50</span></div>
+                <div>ストレス: <span id="stressValue">0</span></div>
+            </div>
+
+            <div class="text-box">
+                <div class="text-content" id="textContent"></div>
+            </div>
+
+            <div class="choices" id="choices"></div>
+        </div>
+    </div>
+
+    <script>
+        class RetroGame {
+            constructor() {
+                this.state = {
+                    phase: 'intro',
+                    trust: 50,
+                    stress: 0,
+                    documents: [],
+                    textSpeed: 50,
+                };
+
+                this.scenes = {
+                    intro: {
+                        text: "20XX年、あなたの会社に税務調査の通知が届いた…次の書類を用意してください: {documents}",
+                        nextPhase: 'preparation',
+                        image: "office.png"
+                    },
+                    preparation: {
+                        text: "税務調査の準備をしましょう。 {item} に関するデータを確認できます。",
+                        choices: [
+                            { text: "すぐに準備を始める", next: 'documents', trust: 10 },
+                            { text: "明日から始める", next: 'documents', trust: -5 },
+                            { text: "無視する", next: 'badEnd', trust: -20 }
+                        ],
+                        image: "office.png"
+                    },
+                    documents: {
+                        text: "{item} に記載されている金額は {amount} 円です。どのように対応しますか？",
+                        choices: [
+                            { text: "丁寧に説明する", next: 'meeting', trust: 5 },
+                            { text: "一般的に説明する", next: 'meeting', trust: 0 },
+                            { text: "記憶が曖昧", next: 'meeting', trust: -10 }
+                        ],
+                        image: "office.png"
+                    },
+                    meeting: {
+                        text: "税務調査官が訪問しました。調査の対応が続きます。",
+                        choices: [
+                            { text: "真摯に対応する", next: 'end', trust: 5 },
+                            { text: "簡単に説明する", next: 'end', trust: 0 },
+                        ],
+                        image: "office.png"
+                    },
+                    end: {
+                        text: "税務調査が終了しました。信頼度に応じた評価が出されます。",
+                        image: "office.png"
+                    },
+                    badEnd: {
+                        text: "準備を怠った結果、問題が発生しました…Game Over。",
+                        image: "office.png"
+                    }
+                };
+
+                this.init();
+            }
+
+            init() {
+                document.getElementById('csvFileInput').addEventListener('change', (event) => this.loadCSV(event));
+                document.querySelector('.upload-label').addEventListener('click', () => document.getElementById('csvFileInput').click());
+                this.showScene('intro');
+            }
+
+            async loadCSV(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const arrayBuffer = await file.arrayBuffer();
+                const decoder = new TextDecoder('shift_jis');
+                const text = decoder.decode(arrayBuffer);
+                this.parseCSV(text);
+            }
+
+            parseCSV(text) {
+                const rows = text.trim().split('\n');
+                rows.forEach((row, index) => {
+                    if (index === 0) return;
+                    const columns = row.split(',');
+                    const item = columns[0].trim();
+                    const amount = columns[1] ? columns[1].trim() : "0";
+                    this.state.documents.push({ item, amount });
+                });
+                this.displayData();
+                this.showScene('preparation'); 
+            }
+
+            displayData() {
+                const dataDetails = document.getElementById('dataDetails');
+                dataDetails.innerHTML = this.state.documents.map(doc => `<div>${doc.item}: ${doc.amount} 円</div>`).join('');
+                document.getElementById('csvFileInput').style.display = 'none';
+                document.querySelector('.upload-label').style.display = 'none';
+            }
+
+            formatText(text) {
+                return text.replace(/{item}/g, this.state.documents[0]?.item || "書類")
+                           .replace(/{amount}/g, this.state.documents[0]?.amount || "不明")
+                           .replace(/{documents}/g, this.state.documents.map(doc => doc.item).join(", "));
+            }
+
+            async typeText(text) {
+                const textContent = document.getElementById('textContent');
+                textContent.innerHTML = '';
+                
+                const formattedText = this.formatText(text);
+                for (let char of formattedText) {
+                    textContent.innerHTML += char;
+                    if (char !== '\n') {
+                        await new Promise(resolve => setTimeout(resolve, this.state.textSpeed));
+                    }
+                }
+            }
+
+            showScene(sceneName) {
+                const scene = this.scenes[sceneName];
+                if (!scene) return;
+
+                this.typeText(scene.text);
+                document.getElementById('sceneImage').querySelector('img').src = scene.image;
+                this.displayChoices(scene.choices || []);
+            }
+
+            displayChoices(choices) {
+                const choicesContainer = document.getElementById('choices');
+                choicesContainer.innerHTML = '';
+
+                choices.forEach(choice => {
+                    const choiceElem = document.createElement('div');
+                    choiceElem.className = 'choice';
+                    choiceElem.innerText = choice.text;
+                    choiceElem.onclick = () => {
+                        this.state.trust += choice.trust || 0;
+                        document.getElementById('trustValue').innerText = this.state.trust;
+                        this.showScene(choice.next);
+                    };
+                    choicesContainer.appendChild(choiceElem);
+                });
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const game = new RetroGame();
+        });
+    </script>
+</body>
+</html>
