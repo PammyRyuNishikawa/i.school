@@ -6,7 +6,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=M+PLUS+1p:wght@400&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: 'Press Start 2P', cursive, 'M PLUS 1p', sans-serif;
+            font-family: 'Press Start 2P', 'M PLUS 1p', sans-serif;
             background-color: #000;
             color: #33FF33;
             text-align: center;
@@ -23,7 +23,7 @@
             background-color: #222;
             padding: 20px;
             color: #FFCC33;
-            font-size: 24px;
+            font-size: 18px;
             overflow-y: auto;
         }
         .game-content {
@@ -35,14 +35,9 @@
             color: #33FF33;
         }
         .scene-image img {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
             width: 100%;
             height: auto;
-            max-height: 600px;
+            max-height: 400px;
             object-fit: contain;
             border: 2px solid #33FF33;
             margin-bottom: 10px;
@@ -52,7 +47,7 @@
             justify-content: space-around;
             margin-bottom: 10px;
             color: #FFCC33;
-            font-size: 20px;
+            font-size: 18px;
         }
         .text-box {
             background-color: #111;
@@ -60,10 +55,11 @@
             padding: 15px;
             border: 2px solid #33FF33;
             margin-bottom: 15px;
-            font-size: 20px;
+            font-size: 18px;
             text-align: left;
             line-height: 1.6;
             flex-grow: 1;
+            overflow-y: auto;
         }
         .choices .choice {
             padding: 8px;
@@ -72,7 +68,7 @@
             color: #FFF;
             border: 1px solid #33FF33;
             cursor: pointer;
-            font-size: 20px;
+            font-size: 18px;
         }
         .choices .choice:hover {
             background-color: #555;
@@ -83,9 +79,21 @@
         .upload-label {
             color: #FFCC33;
             cursor: pointer;
-            font-size: 20px;
+            font-size: 18px;
             display: inline-block;
             margin-bottom: 10px;
+        }
+        .play-again-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #33FF33;
+            color: #000;
+            font-size: 18px;
+            border: none;
+            cursor: pointer;
+        }
+        .play-again-button:hover {
+            background-color: #28cc28;
         }
     </style>
 </head>
@@ -119,61 +127,65 @@
     <script>
         class RetroGame {
             constructor() {
-                this.state = {
-                    phase: 'intro',
+                this.initialState = {
                     trust: 50,
                     stress: 0,
                     documents: [],
-                    textSpeed: 50,
+                    textSpeed: 30,
+                    currentScene: '',
+                    currentDocumentIndex: 0,
                 };
+                this.state = { ...this.initialState };
 
                 this.scenes = {
                     intro: {
-                        text: "20XX年、あなたの会社に税務調査の通知が届いた…次の書類を用意してください: {documents}",
-                        nextPhase: 'preparation',
-                        image: "office.png"
+                        text: "20XX年、あなたの会社に税務調査の通知が届いた。\n調査官は以下の書類について詳しく確認したいようだ: {documents}\n準備を進めましょう。",
+                        image: "office.png",
+                        next: 'preparation',
                     },
                     preparation: {
-                        text: "税務調査の準備をしましょう。{item1} と {item2} に関するデータを確認できます。",
+                        text: "税務調査の準備を始めます。\nまずは書類を整理し、質問に備えましょう。",
+                        image: "office.png",
                         choices: [
-                            { text: "すぐに準備を始める", next: 'documents', trust: 10 },
-                            { text: "明日から始める", next: 'documents', trust: -5 },
-                            { text: "無視する", next: 'badEnd', trust: -20 }
-                        ],
-                        image: "office.png"
+                            { text: "迅速に準備を進める", next: 'documentReview', trust: 5 },
+                            { text: "後回しにする", next: 'badEnd', trust: -20 },
+                        ]
                     },
-                    documents: {
-                        text: "{item1} に記載されている金額は {amount1} 円です。どのように対応しますか？",
+                    documentReview: {
+                        text: "{currentItem} の金額は {currentAmount} 円です。\n調査官からの質問にどう答えますか？",
+                        image: "documents.png",
                         choices: [
-                            { text: "丁寧に説明する", next: 'meeting1', trust: 5 },
-                            { text: "一般的に説明する", next: 'meeting1', trust: 0 },
-                            { text: "記憶が曖昧", next: 'meeting1', trust: -10 }
-                        ],
-                        image: "office.png"
+                            { text: "詳細に説明する", next: 'investigation', trust: 5 },
+                            { text: "簡潔に答える", next: 'investigation', trust: 0 },
+                            { text: "不明瞭な回答をする", next: 'investigation', trust: -5 },
+                        ]
                     },
-                    meeting1: {
-                        text: "税務調査官が {item1} に関して質問をしてきました。どのように答えますか？",
+                    investigation: {
+                        text: "調査官がさらに詳細な情報を求めています。\nどのように対応しますか？",
+                        image: "office.png",
                         choices: [
-                            { text: "すべて説明する", next: 'meeting2', trust: 5 },
-                            { text: "一部だけ説明する", next: 'meeting2', trust: 0 },
-                        ],
-                        image: "office.png"
+                            { text: "全ての情報を提供する", next: 'nextDocument', trust: 5 },
+                            { text: "一部の情報だけ提供する", next: 'nextDocument', trust: -5 },
+                            { text: "情報提供を拒否する", next: 'badEnd', trust: -20 },
+                        ]
                     },
-                    meeting2: {
-                        text: "税務調査官が {item2} に関して質問をしてきました。どのように答えますか？",
-                        choices: [
-                            { text: "すべて説明する", next: 'end', trust: 5 },
-                            { text: "一部だけ説明する", next: 'end', trust: 0 },
-                        ],
-                        image: "office.png"
+                    nextDocument: {
+                        text: "",
+                        next: 'checkNextDocument',
                     },
                     end: {
-                        text: "税務調査が終了しました。信頼度に応じた評価が出されます。",
-                        image: "office.png"
+                        text: "税務調査が終了しました。\n最終的な信頼度は {trust} です。\n結果に応じて評価が決まります。",
+                        image: "office.png",
+                        choices: [
+                            { text: "もう一度遊ぶ", action: 'resetGame' }
+                        ]
                     },
                     badEnd: {
-                        text: "準備を怠った結果、問題が発生しました…Game Over。",
-                        image: "office.png"
+                        text: "準備不足や対応の不備により、税務調査が不利な結果となりました。\nゲームオーバー。",
+                        image: "office.png",
+                        choices: [
+                            { text: "もう一度遊ぶ", action: 'resetGame' }
+                        ]
                     }
                 };
 
@@ -181,9 +193,14 @@
             }
 
             init() {
-                document.getElementById('csvFileInput').addEventListener('change', (event) => this.loadCSV(event));
-                document.querySelector('.upload-label').addEventListener('click', () => document.getElementById('csvFileInput').click());
+                this.bindEvents();
                 this.showScene('intro');
+            }
+
+            bindEvents() {
+                const csvFileInput = document.getElementById('csvFileInput');
+                csvFileInput.addEventListener('change', (event) => this.loadCSV(event));
+                document.querySelector('.upload-label').addEventListener('click', () => csvFileInput.click());
             }
 
             async loadCSV(event) {
@@ -198,7 +215,8 @@
 
             parseCSV(text) {
                 const rows = text.trim().split('\n');
-                this.state.documents = []; // Reset the documents array
+                this.state.documents = [];
+                this.state.currentDocumentIndex = 0; // Reset document index
                 rows.forEach((row, index) => {
                     if (index === 0) return; // Skip header
                     const columns = row.split(',');
@@ -207,7 +225,7 @@
                     this.state.documents.push({ item, amount });
                 });
                 this.displayData();
-                this.showScene('preparation'); 
+                this.showScene('preparation');
             }
 
             displayData() {
@@ -218,17 +236,18 @@
             }
 
             formatText(text) {
-                return text.replace(/{item1}/g, this.state.documents[0]?.item || "書類1")
-                           .replace(/{amount1}/g, this.state.documents[0]?.amount || "不明")
-                           .replace(/{item2}/g, this.state.documents[1]?.item || "書類2")
-                           .replace(/{amount2}/g, this.state.documents[1]?.amount || "不明")
-                           .replace(/{documents}/g, this.state.documents.map(doc => doc.item).join(", "));
+                const currentDoc = this.state.documents[this.state.currentDocumentIndex];
+                const documentsList = this.state.documents.map(doc => doc.item).join(", ");
+                return text.replace(/{documents}/g, documentsList)
+                           .replace(/{currentItem}/g, currentDoc ? currentDoc.item : "")
+                           .replace(/{currentAmount}/g, currentDoc ? currentDoc.amount : "")
+                           .replace(/{trust}/g, this.state.trust);
             }
 
             async typeText(text) {
                 const textContent = document.getElementById('textContent');
                 textContent.innerHTML = '';
-                
+
                 const formattedText = this.formatText(text);
                 for (let char of formattedText) {
                     textContent.innerHTML += char;
@@ -238,12 +257,31 @@
 
             async showScene(sceneKey) {
                 const scene = this.scenes[sceneKey];
-                document.getElementById('sceneImage').querySelector('img').src = scene.image;
+                this.state.currentScene = sceneKey;
 
-                await this.typeText(scene.text);
+                if (scene.image) {
+                    document.getElementById('sceneImage').querySelector('img').src = scene.image;
+                }
+
+                if (scene.text) {
+                    await this.typeText(scene.text);
+                } else {
+                    document.getElementById('textContent').innerHTML = '';
+                }
 
                 this.updateStatus();
-                this.showChoices(scene.choices || []);
+
+                if (scene.choices) {
+                    this.showChoices(scene.choices);
+                } else if (scene.next) {
+                    if (scene.next === 'checkNextDocument') {
+                        this.checkNextDocument();
+                    } else {
+                        this.showScene(scene.next);
+                    }
+                } else {
+                    this.showChoices([]); // Clear choices
+                }
             }
 
             updateStatus() {
@@ -258,14 +296,55 @@
                     const choiceElement = document.createElement('div');
                     choiceElement.className = 'choice';
                     choiceElement.innerText = choice.text;
-                    choiceElement.addEventListener('click', () => this.selectChoice(choice));
+                    choiceElement.addEventListener('click', () => {
+                        if (choice.action === 'resetGame') {
+                            this.resetGame();
+                        } else {
+                            this.selectChoice(choice);
+                        }
+                    });
                     choicesContainer.appendChild(choiceElement);
                 });
             }
 
             selectChoice(choice) {
-                this.state.trust += choice.trust;
-                this.showScene(choice.next);
+                if (choice.trust !== undefined) {
+                    this.state.trust += choice.trust;
+                }
+                if (choice.stress !== undefined) {
+                    this.state.stress += choice.stress;
+                }
+
+                if (choice.next) {
+                    this.showScene(choice.next);
+                } else {
+                    this.showScene('end');
+                }
+            }
+
+            checkNextDocument() {
+                this.state.currentDocumentIndex++;
+                if (this.state.currentDocumentIndex < this.state.documents.length) {
+                    this.showScene('documentReview');
+                } else {
+                    this.showScene('end');
+                }
+            }
+
+            resetGame() {
+                // Reset game state
+                this.state = { ...this.initialState };
+                document.getElementById('dataDetails').innerHTML = '';
+                document.getElementById('csvFileInput').style.display = 'inline';
+                document.querySelector('.upload-label').style.display = 'inline-block';
+
+                // **ファイル入力要素の値をリセット**
+                document.getElementById('csvFileInput').value = '';
+
+                // イベントリスナーを再バインド
+                this.bindEvents();
+
+                this.showScene('intro');
             }
         }
 
