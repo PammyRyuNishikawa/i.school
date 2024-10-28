@@ -6,7 +6,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=M+PLUS+1p:wght@400&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: 'Press Start 2P', cursive, 'M PLUS 1p', sans-serif; /* レトロフォントと日本語フォントを適用 */
+            font-family: 'Press Start 2P', cursive, 'M PLUS 1p', sans-serif;
             background-color: #000;
             color: #33FF33;
             text-align: center;
@@ -41,9 +41,9 @@
             align-items: center;
             overflow: hidden;
             width: 100%;
-            height: auto; /* heightをautoにすることで縦の圧縮を防ぎます */
-            max-height: 600px; /* 高さの最大値を設定します */
-            object-fit: contain; /* containを使用して画像のアスペクト比を維持します */
+            height: auto;
+            max-height: 600px;
+            object-fit: contain;
             border: 2px solid #33FF33;
             margin-bottom: 10px;
         }
@@ -134,7 +134,7 @@
                         image: "office.png"
                     },
                     preparation: {
-                        text: "税務調査の準備をしましょう。 {item} に関するデータを確認できます。",
+                        text: "税務調査の準備をしましょう。{item1} と {item2} に関するデータを確認できます。",
                         choices: [
                             { text: "すぐに準備を始める", next: 'documents', trust: 10 },
                             { text: "明日から始める", next: 'documents', trust: -5 },
@@ -143,19 +143,27 @@
                         image: "office.png"
                     },
                     documents: {
-                        text: "{item} に記載されている金額は {amount} 円です。どのように対応しますか？",
+                        text: "{item1} に記載されている金額は {amount1} 円です。どのように対応しますか？",
                         choices: [
-                            { text: "丁寧に説明する", next: 'meeting', trust: 5 },
-                            { text: "一般的に説明する", next: 'meeting', trust: 0 },
-                            { text: "記憶が曖昧", next: 'meeting', trust: -10 }
+                            { text: "丁寧に説明する", next: 'meeting1', trust: 5 },
+                            { text: "一般的に説明する", next: 'meeting1', trust: 0 },
+                            { text: "記憶が曖昧", next: 'meeting1', trust: -10 }
                         ],
                         image: "office.png"
                     },
-                    meeting: {
-                        text: "税務調査官が訪問しました。調査の対応が続きます。",
+                    meeting1: {
+                        text: "税務調査官が {item1} に関して質問をしてきました。どのように答えますか？",
                         choices: [
-                            { text: "真摯に対応する", next: 'end', trust: 5 },
-                            { text: "簡単に説明する", next: 'end', trust: 0 },
+                            { text: "すべて説明する", next: 'meeting2', trust: 5 },
+                            { text: "一部だけ説明する", next: 'meeting2', trust: 0 },
+                        ],
+                        image: "office.png"
+                    },
+                    meeting2: {
+                        text: "税務調査官が {item2} に関して質問をしてきました。どのように答えますか？",
+                        choices: [
+                            { text: "すべて説明する", next: 'end', trust: 5 },
+                            { text: "一部だけ説明する", next: 'end', trust: 0 },
                         ],
                         image: "office.png"
                     },
@@ -190,8 +198,9 @@
 
             parseCSV(text) {
                 const rows = text.trim().split('\n');
+                this.state.documents = []; // Reset the documents array
                 rows.forEach((row, index) => {
-                    if (index === 0) return;
+                    if (index === 0) return; // Skip header
                     const columns = row.split(',');
                     const item = columns[0].trim();
                     const amount = columns[1] ? columns[1].trim() : "0";
@@ -209,8 +218,10 @@
             }
 
             formatText(text) {
-                return text.replace(/{item}/g, this.state.documents[0]?.item || "書類")
-                           .replace(/{amount}/g, this.state.documents[0]?.amount || "不明")
+                return text.replace(/{item1}/g, this.state.documents[0]?.item || "書類1")
+                           .replace(/{amount1}/g, this.state.documents[0]?.amount || "不明")
+                           .replace(/{item2}/g, this.state.documents[1]?.item || "書類2")
+                           .replace(/{amount2}/g, this.state.documents[1]?.amount || "不明")
                            .replace(/{documents}/g, this.state.documents.map(doc => doc.item).join(", "));
             }
 
@@ -221,42 +232,44 @@
                 const formattedText = this.formatText(text);
                 for (let char of formattedText) {
                     textContent.innerHTML += char;
-                    if (char !== '\n') {
-                        await new Promise(resolve => setTimeout(resolve, this.state.textSpeed));
-                    }
+                    await new Promise(resolve => setTimeout(resolve, this.state.textSpeed));
                 }
             }
 
-            showScene(sceneName) {
-                const scene = this.scenes[sceneName];
-                if (!scene) return;
-
-                this.typeText(scene.text);
+            async showScene(sceneKey) {
+                const scene = this.scenes[sceneKey];
                 document.getElementById('sceneImage').querySelector('img').src = scene.image;
-                this.displayChoices(scene.choices || []);
+
+                await this.typeText(scene.text);
+
+                this.updateStatus();
+                this.showChoices(scene.choices || []);
             }
 
-            displayChoices(choices) {
+            updateStatus() {
+                document.getElementById('trustValue').innerText = this.state.trust;
+                document.getElementById('stressValue').innerText = this.state.stress;
+            }
+
+            showChoices(choices) {
                 const choicesContainer = document.getElementById('choices');
                 choicesContainer.innerHTML = '';
-
                 choices.forEach(choice => {
-                    const choiceElem = document.createElement('div');
-                    choiceElem.className = 'choice';
-                    choiceElem.innerText = choice.text;
-                    choiceElem.onclick = () => {
-                        this.state.trust += choice.trust || 0;
-                        document.getElementById('trustValue').innerText = this.state.trust;
-                        this.showScene(choice.next);
-                    };
-                    choicesContainer.appendChild(choiceElem);
+                    const choiceElement = document.createElement('div');
+                    choiceElement.className = 'choice';
+                    choiceElement.innerText = choice.text;
+                    choiceElement.addEventListener('click', () => this.selectChoice(choice));
+                    choicesContainer.appendChild(choiceElement);
                 });
+            }
+
+            selectChoice(choice) {
+                this.state.trust += choice.trust;
+                this.showScene(choice.next);
             }
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const game = new RetroGame();
-        });
+        window.onload = () => new RetroGame();
     </script>
 </body>
 </html>
