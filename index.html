@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>税務調査アドベンチャー</title>
+    <!-- スタイルシート -->
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=M+PLUS+1p:wght@400&display=swap" rel="stylesheet">
     <style>
         body {
@@ -108,7 +109,7 @@
 
         <div class="game-content">
             <div class="scene-image" id="sceneImage">
-                <img src="/api/placeholder/800/400" alt="scene">
+                <img src="office.png" alt="scene">
             </div>
 
             <div class="status-bar">
@@ -147,8 +148,16 @@
                         text: "税務調査の準備を始めます。\nまずは書類を整理し、質問に備えましょう。",
                         image: "office.png",
                         choices: [
-                            { text: "迅速に準備を進める", next: 'documentReview', trust: 5 },
+                            { text: "迅速に準備を進める", next: 'greeting', trust: 5 },
                             { text: "後回しにする", next: 'badEnd', trust: -20 },
+                        ]
+                    },
+                    greeting: {
+                        text: "税務調査官が訪問しました。\n調査官: 『おはようございます。本日はよろしくお願いいたします。』",
+                        image: "appriciation.png",
+                        choices: [
+                            { text: "よろしくお願いします。", next: 'documentReview', trust: 5 },
+                            { text: "・・・", next: 'documentReview', trust: -5 },
                         ]
                     },
                     documentReview: {
@@ -162,12 +171,33 @@
                     },
                     investigation: {
                         text: "調査官がさらに詳細な情報を求めています。\nどのように対応しますか？",
-                        image: "office.png",
+                        image: "officer.png",
                         choices: [
-                            { text: "全ての情報を提供する", next: 'nextDocument', trust: 5 },
-                            { text: "一部の情報だけ提供する", next: 'nextDocument', trust: -5 },
+                            { text: "全ての情報を提供する", next: 'deskRequest', trust: 5 },
+                            { text: "一部の情報だけ提供する", next: 'deskRequest', trust: -5 },
                             { text: "情報提供を拒否する", next: 'badEnd', trust: -20 },
                         ]
+                    },
+                    deskRequest: {
+                        text: "調査官: 『机の中を見せていただけますか？』",
+                        image: "desk.png",
+                        choices: [
+                            { text: "いやです。", next: 'deskInsist', trust: -5 },
+                            { text: "どうぞご覧ください。", next: 'deskAccept', trust: 5 },
+                        ]
+                    },
+                    deskInsist: {
+                        text: "調査官: 『何か隠しているのですか？』\n調査官が疑いの目を向けています。",
+                        image: "desk.png",
+                        choices: [
+                            { text: "やっぱり見せます。", next: 'deskAccept', trust: -5 },
+                            { text: "見せるわけにはいきません。", next: 'badEnd', trust: -20 },
+                        ]
+                    },
+                    deskAccept: {
+                        text: "調査官は机の中を調べましたが、特に問題はなさそうです。",
+                        image: "officer.png",
+                        next: 'nextDocument',
                     },
                     nextDocument: {
                         text: "",
@@ -181,8 +211,8 @@
                         ]
                     },
                     badEnd: {
-                        text: "準備不足や対応の不備により、税務調査が不利な結果となりました。\nゲームオーバー。",
-                        image: "office.png",
+                        text: "調査官の疑いが深まり、思わぬ問題が発生しました。\nゲームオーバー。",
+                        image: "point.png",
                         choices: [
                             { text: "もう一度遊ぶ", action: 'resetGame' }
                         ]
@@ -280,7 +310,7 @@
                         this.showScene(scene.next);
                     }
                 } else {
-                    this.showChoices([]); // Clear choices
+                    this.showChoices([]); // 選択肢をクリア
                 }
             }
 
@@ -338,7 +368,7 @@
                 document.getElementById('csvFileInput').style.display = 'inline';
                 document.querySelector('.upload-label').style.display = 'inline-block';
 
-                // **ファイル入力要素の値をリセット**
+                // ファイル入力要素の値をリセット
                 document.getElementById('csvFileInput').value = '';
 
                 // イベントリスナーを再バインド
