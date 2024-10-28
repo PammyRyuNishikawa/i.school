@@ -96,6 +96,30 @@
         .play-again-button:hover {
             background-color: #28cc28;
         }
+        /* テキスト入力のスタイル */
+        .input-box {
+            margin-top: 10px;
+            text-align: center;
+        }
+        .input-box input[type="text"] {
+            width: 80%;
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #33FF33;
+            background-color: #222;
+            color: #FFF;
+        }
+        .input-box button {
+            padding: 8px 16px;
+            margin-left: 10px;
+            font-size: 16px;
+            background-color: #33FF33;
+            border: none;
+            cursor: pointer;
+        }
+        .input-box button:hover {
+            background-color: #28cc28;
+        }
     </style>
 </head>
 <body>
@@ -122,6 +146,12 @@
             </div>
 
             <div class="choices" id="choices"></div>
+
+            <!-- テキスト入力エリア -->
+            <div class="input-box" id="inputBox" style="display: none;">
+                <input type="text" id="textInput" placeholder="ここに入力してください">
+                <button id="submitButton">送信</button>
+            </div>
         </div>
     </div>
 
@@ -132,9 +162,10 @@
                     trust: 50,
                     stress: 0,
                     documents: [],
-                    textSpeed: 30,
+                    textSpeed: 60,
                     currentScene: '',
                     currentDocumentIndex: 0,
+                    userResponse: '', // ユーザーのテキスト入力を保存
                 };
                 this.state = { ...this.initialState };
 
@@ -183,21 +214,49 @@
                         image: "desk.png",
                         choices: [
                             { text: "いやです。", next: 'deskInsist', trust: -5 },
-                            { text: "どうぞご覧ください。", next: 'deskAccept', trust: 5 },
+                            { text: "どうぞご覧ください。", next: 'envelopeFound', trust: 5 },
                         ]
                     },
                     deskInsist: {
                         text: "調査官: 『何か隠しているのですか？』\n調査官が疑いの目を向けています。",
-                        image: "desk.png",
+                        image: "office.png",
                         choices: [
-                            { text: "やっぱり見せます。", next: 'deskAccept', trust: -5 },
+                            { text: "やっぱり見せます。", next: 'envelopeFound', trust: -5 },
                             { text: "見せるわけにはいきません。", next: 'badEnd', trust: -20 },
                         ]
                     },
-                    deskAccept: {
-                        text: "調査官は机の中を調べましたが、特に問題はなさそうです。",
+                    envelopeFound: {
+                        text: "調査官は机の中から封筒を見つけました。\n調査官: 『この封筒は何ですか？』",
+                        image: "envelope.png",
+                        choices: [
+                            { text: "現金", next: 'cashExplanation', trust: -10 },
+                            { text: "手紙", next: 'letterExplanation', trust: 0 },
+                            { text: "空っぽ", next: 'emptyExplanation', trust: -5 },
+                        ]
+                    },
+                    cashExplanation: {
+                        text: "調査官: 『なぜ現金があるのですか？』\n理由を説明してください。",
+                        image: "money.png",
+                        input: true, // テキスト入力を有効化
+                        next: 'cashResponse', // **修正点：nextを追加**
+                    },
+                    cashResponse: {
+                        text: "あなた: 『{userResponse}』\n調査官はあなたの説明を理解しました。",
                         image: "officer.png",
                         next: 'nextDocument',
+                    },
+                    letterExplanation: {
+                        text: "調査官は手紙を確認しましたが、特に問題はなさそうです。",
+                        image: "officer.png",
+                        next: 'nextDocument',
+                    },
+                    emptyExplanation: {
+                        text: "調査官: 『空っぽの封筒がなぜ机にあるのですか？』",
+                        image: "point.png",
+                        choices: [
+                            { text: "ただのゴミです。", next: 'nextDocument', trust: -5 },
+                            { text: "特に理由はありません。", next: 'nextDocument', trust: -5 },
+                        ]
                     },
                     nextDocument: {
                         text: "",
@@ -212,7 +271,7 @@
                     },
                     badEnd: {
                         text: "調査官の疑いが深まり、思わぬ問題が発生しました。\nゲームオーバー。",
-                        image: "point.png",
+                        image: "office.png",
                         choices: [
                             { text: "もう一度遊ぶ", action: 'resetGame' }
                         ]
@@ -231,6 +290,9 @@
                 const csvFileInput = document.getElementById('csvFileInput');
                 csvFileInput.addEventListener('change', (event) => this.loadCSV(event));
                 document.querySelector('.upload-label').addEventListener('click', () => csvFileInput.click());
+
+                // テキスト入力の送信ボタンのイベントリスナー
+                document.getElementById('submitButton').addEventListener('click', () => this.handleTextInput());
             }
 
             async loadCSV(event) {
@@ -271,7 +333,8 @@
                 return text.replace(/{documents}/g, documentsList)
                            .replace(/{currentItem}/g, currentDoc ? currentDoc.item : "")
                            .replace(/{currentAmount}/g, currentDoc ? currentDoc.amount : "")
-                           .replace(/{trust}/g, this.state.trust);
+                           .replace(/{trust}/g, this.state.trust)
+                           .replace(/{userResponse}/g, this.state.userResponse);
             }
 
             async typeText(text) {
@@ -289,6 +352,16 @@
                 const scene = this.scenes[sceneKey];
                 this.state.currentScene = sceneKey;
 
+                // テキスト入力エリアの表示制御
+                const inputBox = document.getElementById('inputBox');
+                if (scene.input) {
+                    inputBox.style.display = 'block';
+                    document.getElementById('choices').style.display = 'none';
+                } else {
+                    inputBox.style.display = 'none';
+                    document.getElementById('choices').style.display = 'block';
+                }
+
                 if (scene.image) {
                     document.getElementById('sceneImage').querySelector('img').src = scene.image;
                 }
@@ -301,9 +374,10 @@
 
                 this.updateStatus();
 
+                // 修正ポイント: scene.input が true の場合、次のシーンに自動的に進まないようにする
                 if (scene.choices) {
                     this.showChoices(scene.choices);
-                } else if (scene.next) {
+                } else if (!scene.input && scene.next) {
                     if (scene.next === 'checkNextDocument') {
                         this.checkNextDocument();
                     } else {
@@ -349,6 +423,25 @@
                     this.showScene(choice.next);
                 } else {
                     this.showScene('end');
+                }
+            }
+
+            handleTextInput() {
+                const userInput = document.getElementById('textInput').value.trim();
+                if (userInput === '') {
+                    alert('入力してください。');
+                    return;
+                }
+                this.state.userResponse = userInput;
+                document.getElementById('textInput').value = '';
+
+                // テキスト入力エリアを隠す
+                document.getElementById('inputBox').style.display = 'none';
+
+                // 次のシーンに進む
+                const currentScene = this.scenes[this.state.currentScene];
+                if (currentScene.next) {
+                    this.showScene(currentScene.next);
                 }
             }
 
