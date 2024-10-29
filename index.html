@@ -143,8 +143,8 @@
         <source src="end.mp3" type="audio/mpeg">
     </audio>
     <audio id="bgmBadEnd">
-        <source src="badend.m4a" type="audio/mp4">
-        <source src="badend.mp3" type="audio/mpeg">
+        <source src="bad_end.m4a" type="audio/mp4">
+        <source src="bad_end.mp3" type="audio/mpeg">
     </audio>
 
     <!-- 開始画面 -->
@@ -197,6 +197,7 @@
                     currentDocumentIndex: 0,
                     userResponse: '',
                     currentBgm: null,
+                    deskChecked: false, // 机のチェックをしたかどうか
                 };
                 this.state = { ...this.initialState };
 
@@ -239,11 +240,20 @@
                         text: "調査官がさらに詳細な情報を求めています。\nどのように対応しますか？",
                         image: "officer.png",
                         choices: [
-                            { text: "全ての情報を提供する", next: 'deskRequest', trust: 5 },
-                            { text: "一部の情報だけ提供する", next: 'deskRequest', trust: -5 },
+                            { text: "全ての情報を提供する", next: 'postInvestigation', trust: 5 },
+                            { text: "一部の情報だけ提供する", next: 'postInvestigation', trust: -5 },
                             { text: "情報提供を拒否する", next: 'badEnd', trust: -20 },
                         ],
                         bgm: 'bgmNormal',
+                    },
+                    postInvestigation: {
+                        text: "",
+                        next: 'checkDeskOrNextDocument',
+                        bgm: 'bgmNormal',
+                    },
+                    checkDeskOrNextDocument: {
+                        text: "",
+                        action: 'checkDeskOrProceed',
                     },
                     deskRequest: {
                         text: "調査官: 『机の中を見せていただけますか？』",
@@ -468,8 +478,14 @@
                 } else if (scene.next) {
                     if (scene.next === 'checkNextDocument') {
                         this.checkNextDocument();
+                    } else if (scene.next === 'checkDeskOrNextDocument') {
+                        this.checkDeskOrProceed();
                     } else {
                         this.showScene(scene.next);
+                    }
+                } else if (scene.action) {
+                    if (scene.action === 'checkDeskOrProceed') {
+                        this.checkDeskOrProceed();
                     }
                 }
             }
@@ -526,6 +542,15 @@
                 const currentScene = this.scenes[this.state.currentScene];
                 if (currentScene.next) {
                     this.showScene(currentScene.next);
+                }
+            }
+
+            checkDeskOrProceed() {
+                if (!this.state.deskChecked && this.state.currentDocumentIndex === 0) {
+                    this.state.deskChecked = true;
+                    this.showScene('deskRequest');
+                } else {
+                    this.showScene('nextDocument');
                 }
             }
 
