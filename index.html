@@ -61,6 +61,7 @@
             line-height: 1.6;
             flex-grow: 1;
             overflow-y: auto;
+            position: relative;
         }
         .choices .choice {
             padding: 8px;
@@ -123,7 +124,36 @@
     </style>
 </head>
 <body>
-    <div class="game-container">
+    <!-- 音源の追加 -->
+    <!-- バックグラウンド音楽を複数用意 -->
+    <audio id="bgmNormal" loop>
+        <source src="normal.m4a" type="audio/mp4">
+        <source src="normal.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="bgmDesk" loop>
+        <source src="desk.m4a" type="audio/mp4">
+        <source src="desk.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="bgmEnvelope" loop>
+        <source src="envelope.m4a" type="audio/mp4">
+        <source src="envelope.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="bgmEnd">
+        <source src="end.m4a" type="audio/mp4">
+        <source src="end.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="bgmBadEnd">
+        <source src="bad_end.m4a" type="audio/mp4">
+        <source src="bad_end.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- 開始画面 -->
+    <div id="startScreen" style="position: absolute; width: 100%; height: 100%; background-color: #000; display: flex; justify-content: center; align-items: center; flex-direction: column;">
+        <h1 style="color: #33FF33;">税務調査アドベンチャー</h1>
+        <button id="startButton" style="padding: 10px 20px; font-size: 18px; cursor: pointer;">ゲーム開始</button>
+    </div>
+
+    <div class="game-container" style="display: none;">
         <div class="data-display" id="dataDisplay">
             <h2>読み込んだデータ:</h2>
             <label for="csvFileInput" class="upload-label">CSVファイルをアップロード</label>
@@ -162,10 +192,11 @@
                     trust: 50,
                     stress: 0,
                     documents: [],
-                    textSpeed: 60,
+                    textSpeed: 30,
                     currentScene: '',
                     currentDocumentIndex: 0,
-                    userResponse: '', // ユーザーのテキスト入力を保存
+                    userResponse: '',
+                    currentBgm: null,
                 };
                 this.state = { ...this.initialState };
 
@@ -174,6 +205,7 @@
                         text: "20XX年、あなたの会社に税務調査の通知が届いた。\n調査官は以下の書類について詳しく確認したいようだ: {documents}\n準備を進めましょう。",
                         image: "office.png",
                         next: 'preparation',
+                        bgm: 'bgmNormal',
                     },
                     preparation: {
                         text: "税務調査の準備を始めます。\nまずは書類を整理し、質問に備えましょう。",
@@ -181,7 +213,8 @@
                         choices: [
                             { text: "迅速に準備を進める", next: 'greeting', trust: 5 },
                             { text: "後回しにする", next: 'badEnd', trust: -20 },
-                        ]
+                        ],
+                        bgm: 'bgmNormal',
                     },
                     greeting: {
                         text: "税務調査官が訪問しました。\n調査官: 『おはようございます。本日はよろしくお願いいたします。』",
@@ -189,7 +222,8 @@
                         choices: [
                             { text: "よろしくお願いします。", next: 'documentReview', trust: 5 },
                             { text: "・・・", next: 'documentReview', trust: -5 },
-                        ]
+                        ],
+                        bgm: 'bgmNormal',
                     },
                     documentReview: {
                         text: "{currentItem} の金額は {currentAmount} 円です。\n調査官からの質問にどう答えますか？",
@@ -198,7 +232,8 @@
                             { text: "詳細に説明する", next: 'investigation', trust: 5 },
                             { text: "簡潔に答える", next: 'investigation', trust: 0 },
                             { text: "不明瞭な回答をする", next: 'investigation', trust: -5 },
-                        ]
+                        ],
+                        bgm: 'bgmNormal',
                     },
                     investigation: {
                         text: "調査官がさらに詳細な情報を求めています。\nどのように対応しますか？",
@@ -207,7 +242,8 @@
                             { text: "全ての情報を提供する", next: 'deskRequest', trust: 5 },
                             { text: "一部の情報だけ提供する", next: 'deskRequest', trust: -5 },
                             { text: "情報提供を拒否する", next: 'badEnd', trust: -20 },
-                        ]
+                        ],
+                        bgm: 'bgmNormal',
                     },
                     deskRequest: {
                         text: "調査官: 『机の中を見せていただけますか？』",
@@ -215,7 +251,8 @@
                         choices: [
                             { text: "いやです。", next: 'deskInsist', trust: -5 },
                             { text: "どうぞご覧ください。", next: 'envelopeFound', trust: 5 },
-                        ]
+                        ],
+                        bgm: 'bgmDesk',
                     },
                     deskInsist: {
                         text: "調査官: 『何か隠しているのですか？』\n調査官が疑いの目を向けています。",
@@ -223,7 +260,8 @@
                         choices: [
                             { text: "やっぱり見せます。", next: 'envelopeFound', trust: -5 },
                             { text: "見せるわけにはいきません。", next: 'badEnd', trust: -20 },
-                        ]
+                        ],
+                        bgm: 'bgmDesk',
                     },
                     envelopeFound: {
                         text: "調査官は机の中から封筒を見つけました。\n調査官: 『この封筒は何ですか？』",
@@ -232,23 +270,27 @@
                             { text: "現金", next: 'cashExplanation', trust: -10 },
                             { text: "手紙", next: 'letterExplanation', trust: 0 },
                             { text: "空っぽ", next: 'emptyExplanation', trust: -5 },
-                        ]
+                        ],
+                        bgm: 'bgmEnvelope',
                     },
                     cashExplanation: {
                         text: "調査官: 『なぜ現金があるのですか？』\n理由を説明してください。",
                         image: "money.png",
-                        input: true, // テキスト入力を有効化
-                        next: 'cashResponse', // **修正点：nextを追加**
+                        input: true,
+                        next: 'cashResponse',
+                        bgm: 'bgmEnvelope',
                     },
                     cashResponse: {
                         text: "あなた: 『{userResponse}』\n調査官はあなたの説明を理解しました。",
                         image: "officer.png",
                         next: 'nextDocument',
+                        bgm: 'bgmNormal',
                     },
                     letterExplanation: {
                         text: "調査官は手紙を確認しましたが、特に問題はなさそうです。",
                         image: "officer.png",
                         next: 'nextDocument',
+                        bgm: 'bgmNormal',
                     },
                     emptyExplanation: {
                         text: "調査官: 『空っぽの封筒がなぜ机にあるのですか？』",
@@ -256,25 +298,29 @@
                         choices: [
                             { text: "ただのゴミです。", next: 'nextDocument', trust: -5 },
                             { text: "特に理由はありません。", next: 'nextDocument', trust: -5 },
-                        ]
+                        ],
+                        bgm: 'bgmNormal',
                     },
                     nextDocument: {
                         text: "",
                         next: 'checkNextDocument',
+                        bgm: 'bgmNormal',
                     },
                     end: {
                         text: "税務調査が終了しました。\n最終的な信頼度は {trust} です。\n結果に応じて評価が決まります。",
                         image: "office.png",
                         choices: [
                             { text: "もう一度遊ぶ", action: 'resetGame' }
-                        ]
+                        ],
+                        bgm: 'bgmEnd',
                     },
                     badEnd: {
                         text: "調査官の疑いが深まり、思わぬ問題が発生しました。\nゲームオーバー。",
                         image: "office.png",
                         choices: [
                             { text: "もう一度遊ぶ", action: 'resetGame' }
-                        ]
+                        ],
+                        bgm: 'bgmBadEnd',
                     }
                 };
 
@@ -283,6 +329,11 @@
 
             init() {
                 this.bindEvents();
+            }
+
+            startGame() {
+                document.getElementById('startScreen').style.display = 'none';
+                document.querySelector('.game-container').style.display = 'flex';
                 this.showScene('intro');
             }
 
@@ -291,8 +342,11 @@
                 csvFileInput.addEventListener('change', (event) => this.loadCSV(event));
                 document.querySelector('.upload-label').addEventListener('click', () => csvFileInput.click());
 
-                // テキスト入力の送信ボタンのイベントリスナー
                 document.getElementById('submitButton').addEventListener('click', () => this.handleTextInput());
+
+                document.getElementById('startButton').addEventListener('click', () => {
+                    this.startGame();
+                });
             }
 
             async loadCSV(event) {
@@ -308,9 +362,9 @@
             parseCSV(text) {
                 const rows = text.trim().split('\n');
                 this.state.documents = [];
-                this.state.currentDocumentIndex = 0; // Reset document index
+                this.state.currentDocumentIndex = 0;
                 rows.forEach((row, index) => {
-                    if (index === 0) return; // Skip header
+                    if (index === 0) return;
                     const columns = row.split(',');
                     const item = columns[0].trim();
                     const amount = columns[1] ? columns[1].trim() : "0";
@@ -348,11 +402,44 @@
                 }
             }
 
+            playBgm(bgmId) {
+                // 以前のBGMを停止
+                if (this.state.currentBgm && this.state.currentBgm !== bgmId) {
+                    const prevAudio = document.getElementById(this.state.currentBgm);
+                    if (prevAudio) {
+                        prevAudio.pause();
+                        prevAudio.currentTime = 0;
+                    }
+                }
+
+                // 新しいBGMを再生
+                const bgmAudio = document.getElementById(bgmId);
+                if (bgmAudio) {
+                    bgmAudio.play();
+                    this.state.currentBgm = bgmId;
+                }
+            }
+
+            stopAllBgm() {
+                const audios = document.querySelectorAll('audio');
+                audios.forEach(audio => {
+                    audio.pause();
+                    audio.currentTime = 0;
+                });
+                this.state.currentBgm = null;
+            }
+
             async showScene(sceneKey) {
                 const scene = this.scenes[sceneKey];
                 this.state.currentScene = sceneKey;
 
-                // テキスト入力エリアの表示制御
+                // BGMを再生
+                if (scene.bgm) {
+                    this.playBgm(scene.bgm);
+                } else {
+                    this.stopAllBgm();
+                }
+
                 const inputBox = document.getElementById('inputBox');
                 if (scene.input) {
                     inputBox.style.display = 'block';
@@ -374,17 +461,16 @@
 
                 this.updateStatus();
 
-                // 修正ポイント: scene.input が true の場合、次のシーンに自動的に進まないようにする
                 if (scene.choices) {
                     this.showChoices(scene.choices);
-                } else if (!scene.input && scene.next) {
+                } else if (scene.input) {
+                    // ユーザーの入力を待つため、ここでは何もしない
+                } else if (scene.next) {
                     if (scene.next === 'checkNextDocument') {
                         this.checkNextDocument();
                     } else {
                         this.showScene(scene.next);
                     }
-                } else {
-                    this.showChoices([]); // 選択肢をクリア
                 }
             }
 
@@ -435,10 +521,8 @@
                 this.state.userResponse = userInput;
                 document.getElementById('textInput').value = '';
 
-                // テキスト入力エリアを隠す
                 document.getElementById('inputBox').style.display = 'none';
 
-                // 次のシーンに進む
                 const currentScene = this.scenes[this.state.currentScene];
                 if (currentScene.next) {
                     this.showScene(currentScene.next);
@@ -455,19 +539,19 @@
             }
 
             resetGame() {
-                // Reset game state
+                this.stopAllBgm();
+
                 this.state = { ...this.initialState };
                 document.getElementById('dataDetails').innerHTML = '';
                 document.getElementById('csvFileInput').style.display = 'inline';
                 document.querySelector('.upload-label').style.display = 'inline-block';
 
-                // ファイル入力要素の値をリセット
                 document.getElementById('csvFileInput').value = '';
 
-                // イベントリスナーを再バインド
                 this.bindEvents();
 
-                this.showScene('intro');
+                document.getElementById('startScreen').style.display = 'flex';
+                document.querySelector('.game-container').style.display = 'none';
             }
         }
 
