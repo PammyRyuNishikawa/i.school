@@ -476,7 +476,7 @@
                 this.state.accountsData = {};
 
                 // 行をループ
-                for (let i = 0; i < rows.length; i++) {
+                for (let i = 1; i < rows.length; i++) {
                     const columns = rows[i];
                     const account = columns[5] ? columns[5].trim() : ''; // 6列目（インデックス5）
                     const amountStr = columns[7] ? columns[7].trim() : '0'; // 8列目（インデックス7）
