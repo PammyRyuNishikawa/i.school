@@ -70,6 +70,19 @@
             font-size: 18px;
             overflow-y: auto;
         }
+        /* テーブルのスタイルを追加 */
+        .data-display table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .data-display th, .data-display td {
+            border: 1px solid #FFCC33;
+            padding: 8px;
+            text-align: left;
+        }
+        .data-display th {
+            background-color: #333;
+        }
         .game-content {
             flex: 2;
             display: flex;
@@ -181,6 +194,10 @@
         <source src="envelope.m4a" type="audio/mp4">
         <source src="envelope.mp3" type="audio/mpeg">
     </audio>
+    <audio id="bgmSerious" loop>
+        <source src="serious.m4a" type="audio/mp4">
+        <source src="serious.mp3" type="audio/mpeg">
+    </audio>
     <audio id="bgmEnd">
         <source src="end.m4a" type="audio/mp4">
         <source src="end.mp3" type="audio/mpeg">
@@ -234,25 +251,31 @@
                 this.initialState = {
                     trust: 50,
                     stress: 0,
-                    documents: [],
+                    accountsData: {}, // 全ての勘定科目と金額を保持
                     textSpeed: 30,
                     currentScene: '',
-                    currentDocumentIndex: 0,
+                    currentAccountIndex: 0,
+                    currentAmountIndex: 0,
                     userResponse: '',
                     currentBgm: null,
-                    deskChecked: false, // 机のチェックをしたかどうか
+                    selectedAccounts: ['交際費', '旅費交通費', '消耗品費', '通信費', '研修費'],
+                    deskChecked: false,
+                    deskCheckTiming: null,
+                    timecardChecked: false,
+                    timecardCheckTiming: null,
+                    questionsAsked: 0,
                 };
                 this.state = { ...this.initialState };
 
                 this.scenes = {
                     intro: {
-                        text: "20XX年、あなたの会社に税務調査の通知が届いた。\n調査官は以下の書類について詳しく確認したいようだ: {documents}\n準備を進めましょう。",
+                        text: "20XX年、あなたの会社に税務調査の通知が届いた。\n調査官は以下の勘定科目について詳しく確認したいようです: {accounts}\n準備を進めましょう。",
                         image: "office.png",
                         next: 'preparation',
                         bgm: 'bgmNormal',
                     },
                     preparation: {
-                        text: "税務調査の準備を始めます。\nまずは書類を整理し、質問に備えましょう。",
+                        text: "税務調査の準備を始めます。\n書類を整理し、質問に備えましょう。",
                         image: "office.png",
                         choices: [
                             { text: "迅速に準備を進める", next: 'greeting', trust: 5 },
@@ -264,40 +287,25 @@
                         text: "税務調査官が訪問しました。\n調査官: 『おはようございます。本日はよろしくお願いいたします。』",
                         image: "appriciation.png",
                         choices: [
-                            { text: "よろしくお願いします。", next: 'documentReview', trust: 5 },
-                            { text: "・・・", next: 'documentReview', trust: -5 },
+                            { text: "よろしくお願いします。", next: 'askUsage', trust: 5 },
+                            { text: "・・・", next: 'askUsage', trust: -5 },
                         ],
                         bgm: 'bgmNormal',
                     },
-                    documentReview: {
-                        text: "{currentItem} の金額は {currentAmount} 円です。\n調査官からの質問にどう答えますか？",
+                    askUsage: {
+                        text: "{currentAccount} の上位5項目のうち、\n金額 {currentAmount} 円の使用用途は何ですか？",
                         image: "documents.png",
-                        choices: [
-                            { text: "詳細に説明する", next: 'investigation', trust: 5 },
-                            { text: "簡潔に答える", next: 'investigation', trust: 0 },
-                            { text: "不明瞭な回答をする", next: 'investigation', trust: -5 },
-                        ],
+                        input: true,
+                        next: 'handleUsageResponse',
                         bgm: 'bgmNormal',
                     },
-                    investigation: {
-                        text: "調査官がさらに詳細な情報を求めています。\nどのように対応しますか？",
+                    handleUsageResponse: {
+                        text: "あなた: 『{userResponse}』\n調査官はあなたの説明を聞きました。",
                         image: "officer.png",
-                        choices: [
-                            { text: "全ての情報を提供する", next: 'postInvestigation', trust: 5 },
-                            { text: "一部の情報だけ提供する", next: 'postInvestigation', trust: -5 },
-                            { text: "情報提供を拒否する", next: 'badEnd', trust: -20 },
-                        ],
+                        next: 'checkNextAmount',
                         bgm: 'bgmNormal',
                     },
-                    postInvestigation: {
-                        text: "",
-                        next: 'checkDeskOrNextDocument',
-                        bgm: 'bgmNormal',
-                    },
-                    checkDeskOrNextDocument: {
-                        text: "",
-                        action: 'checkDeskOrProceed',
-                    },
+                    // 机を確認するシーンを追加
                     deskRequest: {
                         text: "調査官: 『机の中を見せていただけますか？』",
                         image: "desk.png",
@@ -336,31 +344,81 @@
                     cashResponse: {
                         text: "あなた: 『{userResponse}』\n調査官はあなたの説明を理解しました。",
                         image: "officer.png",
-                        next: 'nextDocument',
+                        next: 'afterDeskCheck',
                         bgm: 'bgmNormal',
                     },
                     letterExplanation: {
                         text: "調査官は手紙を確認しましたが、特に問題はなさそうです。",
                         image: "officer.png",
-                        next: 'nextDocument',
+                        next: 'afterDeskCheck',
                         bgm: 'bgmNormal',
                     },
                     emptyExplanation: {
                         text: "調査官: 『空っぽの封筒がなぜ机にあるのですか？』",
                         image: "point.png",
                         choices: [
-                            { text: "ただのゴミです。", next: 'nextDocument', trust: -5 },
-                            { text: "特に理由はありません。", next: 'nextDocument', trust: -5 },
+                            { text: "ただのゴミです。", next: 'afterDeskCheck', trust: -5 },
+                            { text: "特に理由はありません。", next: 'afterDeskCheck', trust: -5 },
                         ],
                         bgm: 'bgmNormal',
                     },
-                    nextDocument: {
+                    afterDeskCheck: {
                         text: "",
-                        next: 'checkNextDocument',
+                        next: 'checkNextAmount',
+                    },
+                    // タイムカード確認のシーンを追加
+                    timecardRequest: {
+                        text: "調査官: 『タイムカードを見せていただけますか？』",
+                        image: "timecard.png",
+                        choices: [
+                            { text: "見せる", next: 'timecardReview', trust: 5 },
+                            { text: "見せない", next: 'refuseTimecard', trust: -10 },
+                        ],
+                        bgm: 'bgmDesk',
+                    },
+                    timecardReview: {
+                        text: "",
+                        next: 'checkTimecardOutcome',
+                    },
+                    timecardNoIssue: {
+                        text: "調査官: 『特に怪しいところはありませんでした。ご協力ありがとうございます。』",
+                        image: "officer.png",
+                        next: 'afterTimecardCheck',
                         bgm: 'bgmNormal',
                     },
+                    timecardIssueFound: {
+                        text: "調査官: 『社長と何度もほぼ同じタイミングで出社されている方がいらっしゃいますね。説明を願えますか？』",
+                        image: "point.png",
+                        choices: [
+                            { text: "根拠を話す", next: 'explainTimeOverlap', trust: 5 },
+                            { text: "黙る", next: 'staySilent', trust: -10 },
+                        ],
+                        bgm: 'bgmEnvelope',
+                    },
+                    explainTimeOverlap: {
+                        text: "あなたはタイムカードの重複について合理的な説明をしました。\n調査官は納得したようです。",
+                        image: "officer.png",
+                        next: 'afterTimecardCheck',
+                        bgm: 'bgmNormal',
+                    },
+                    staySilent: {
+                        text: "あなたが黙り込んでいると、調査官は不審に思っています。",
+                        image: "point.png",
+                        next: 'afterTimecardCheck',
+                        bgm: 'bgmEnvelope',
+                    },
+                    refuseTimecard: {
+                        text: "調査官: 『そうですか…。では他の方法で確認させていただきます。』\n調査官の信頼度が下がりました。",
+                        image: "point.png",
+                        next: 'afterTimecardCheck',
+                        bgm: 'bgmSerious',
+                    },
+                    afterTimecardCheck: {
+                        text: "",
+                        next: 'checkNextAmount',
+                    },
                     end: {
-                        text: "税務調査が終了しました。\n最終的な信頼度は {trust} です。\n結果に応じて評価が決まります。",
+                        text: "税務調査が終了しました。\n最終的な信頼度は {trust} です。\nお疲れ様でした。",
                         image: "office.png",
                         choices: [
                             { text: "もう一度遊ぶ", action: 'resetGame' }
@@ -368,7 +426,7 @@
                         bgm: 'bgmEnd',
                     },
                     badEnd: {
-                        text: "調査官の疑いが深まり、思わぬ問題が発生しました。\nゲームオーバー。",
+                        text: "調査官の疑いが深まり、問題が発生しました。\nゲームオーバー。",
                         image: "office.png",
                         choices: [
                             { text: "もう一度遊ぶ", action: 'resetGame' }
@@ -413,33 +471,95 @@
             }
 
             parseCSV(text) {
-                const rows = text.trim().split('\n');
-                this.state.documents = [];
-                this.state.currentDocumentIndex = 0;
-                rows.forEach((row, index) => {
-                    if (index === 0) return;
-                    const columns = row.split(',');
-                    const item = columns[0].trim();
-                    const amount = columns[1] ? columns[1].trim() : "0";
-                    this.state.documents.push({ item, amount });
-                });
+                const rows = text.trim().split('\n').map(row => row.split(','));
+
+                this.state.accountsData = {};
+
+                // 行をループ
+                for (let i = 0; i < rows.length; i++) {
+                    const columns = rows[i];
+                    const account = columns[5] ? columns[5].trim() : ''; // 6列目（インデックス5）
+                    const amountStr = columns[7] ? columns[7].trim() : '0'; // 8列目（インデックス7）
+                    // 金額のカンマや不要な文字を除去
+                    const amountCleaned = amountStr.replace(/[^0-9.-]/g, '');
+                    const amount = parseFloat(amountCleaned) || 0;
+
+                    if (account !== '') {
+                        if (!this.state.accountsData[account]) {
+                            this.state.accountsData[account] = [];
+                        }
+                        this.state.accountsData[account].push(amount);
+                    }
+                }
+
+                // 各勘定科目について金額の降順にソート
+                for (const account in this.state.accountsData) {
+                    this.state.accountsData[account] = this.state.accountsData[account]
+                        .sort((a, b) => b - a);
+                }
+
+                // ランダムなタイミングを設定
+                const totalQuestions = this.state.selectedAccounts.length * 5;
+                this.state.deskCheckTiming = Math.floor(Math.random() * totalQuestions) + 1;
+                this.state.timecardCheckTiming = Math.floor(Math.random() * totalQuestions) + 1;
+
                 this.displayData();
                 this.showScene('preparation');
             }
 
             displayData() {
                 const dataDetails = document.getElementById('dataDetails');
-                dataDetails.innerHTML = this.state.documents.map(doc => `<div>${doc.item}: ${doc.amount} 円</div>`).join('');
+
+                // テーブルの作成
+                const table = document.createElement('table');
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+
+                const accountHeader = document.createElement('th');
+                accountHeader.innerText = '勘定科目';
+                headerRow.appendChild(accountHeader);
+
+                const amountHeader = document.createElement('th');
+                amountHeader.innerText = '金額';
+                headerRow.appendChild(amountHeader);
+
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+
+                const tbody = document.createElement('tbody');
+
+                for (const account in this.state.accountsData) {
+                    const amounts = this.state.accountsData[account];
+                    const row = document.createElement('tr');
+
+                    const accountCell = document.createElement('td');
+                    accountCell.innerText = account;
+                    row.appendChild(accountCell);
+
+                    const amountCell = document.createElement('td');
+                    amountCell.innerText = amounts.map(amount => amount.toLocaleString()).join(' 円, ') + ' 円';
+                    row.appendChild(amountCell);
+
+                    tbody.appendChild(row);
+                }
+
+                table.appendChild(tbody);
+
+                dataDetails.innerHTML = '';
+                dataDetails.appendChild(table);
+
                 document.getElementById('csvFileInput').style.display = 'none';
                 document.querySelector('.upload-label').style.display = 'none';
             }
 
             formatText(text) {
-                const currentDoc = this.state.documents[this.state.currentDocumentIndex];
-                const documentsList = this.state.documents.map(doc => doc.item).join(", ");
-                return text.replace(/{documents}/g, documentsList)
-                           .replace(/{currentItem}/g, currentDoc ? currentDoc.item : "")
-                           .replace(/{currentAmount}/g, currentDoc ? currentDoc.amount : "")
+                const accountsList = this.state.selectedAccounts.join(", ");
+                const currentAccount = this.state.selectedAccounts[this.state.currentAccountIndex];
+                const currentAmounts = this.state.accountsData[currentAccount];
+                const currentAmount = currentAmounts ? currentAmounts[this.state.currentAmountIndex] : 0;
+                return text.replace(/{accounts}/g, accountsList)
+                           .replace(/{currentAccount}/g, currentAccount)
+                           .replace(/{currentAmount}/g, currentAmount.toLocaleString())
                            .replace(/{trust}/g, this.state.trust)
                            .replace(/{userResponse}/g, this.state.userResponse);
             }
@@ -494,12 +614,19 @@
                 }
 
                 const inputBox = document.getElementById('inputBox');
+                const choicesContainer = document.getElementById('choices');
+
                 if (scene.input) {
                     inputBox.style.display = 'block';
-                    document.getElementById('choices').style.display = 'none';
+                    choicesContainer.style.display = 'none';
                 } else {
                     inputBox.style.display = 'none';
-                    document.getElementById('choices').style.display = 'block';
+                    if (scene.choices && scene.choices.length > 0) {
+                        choicesContainer.style.display = 'block';
+                    } else {
+                        choicesContainer.style.display = 'none';
+                        choicesContainer.innerHTML = '';
+                    }
                 }
 
                 if (scene.image) {
@@ -514,22 +641,20 @@
 
                 this.updateStatus();
 
-                if (scene.choices) {
+                if (scene.choices && scene.choices.length > 0) {
                     this.showChoices(scene.choices);
                 } else if (scene.input) {
                     // ユーザーの入力を待つため、ここでは何もしない
                 } else if (scene.next) {
-                    if (scene.next === 'checkNextDocument') {
-                        this.checkNextDocument();
-                    } else if (scene.next === 'checkDeskOrNextDocument') {
-                        this.checkDeskOrProceed();
+                    if (scene.next === 'checkNextAmount') {
+                        this.checkNextAmount();
+                    } else if (scene.next === 'checkTimecardOutcome') {
+                        this.checkTimecardOutcome();
                     } else {
                         this.showScene(scene.next);
                     }
                 } else if (scene.action) {
-                    if (scene.action === 'checkDeskOrProceed') {
-                        this.checkDeskOrProceed();
-                    }
+                    // 必要に応じてアクションを実行
                 }
             }
 
@@ -588,21 +713,44 @@
                 }
             }
 
-            checkDeskOrProceed() {
-                if (!this.state.deskChecked && this.state.currentDocumentIndex === 0) {
+            checkNextAmount() {
+                this.state.questionsAsked++;
+
+                if (!this.state.deskChecked && this.state.questionsAsked === this.state.deskCheckTiming) {
                     this.state.deskChecked = true;
                     this.showScene('deskRequest');
+                    return;
+                }
+
+                if (!this.state.timecardChecked && this.state.questionsAsked === this.state.timecardCheckTiming) {
+                    this.state.timecardChecked = true;
+                    this.showScene('timecardRequest');
+                    return;
+                }
+
+                this.state.currentAmountIndex++;
+                const currentAccount = this.state.selectedAccounts[this.state.currentAccountIndex];
+                const amounts = this.state.accountsData[currentAccount];
+
+                if (this.state.currentAmountIndex < amounts.length && this.state.currentAmountIndex < 5) {
+                    this.showScene('askUsage');
                 } else {
-                    this.showScene('nextDocument');
+                    this.state.currentAmountIndex = 0;
+                    this.state.currentAccountIndex++;
+                    if (this.state.currentAccountIndex < this.state.selectedAccounts.length) {
+                        this.showScene('askUsage');
+                    } else {
+                        this.showScene('end');
+                    }
                 }
             }
 
-            checkNextDocument() {
-                this.state.currentDocumentIndex++;
-                if (this.state.currentDocumentIndex < this.state.documents.length) {
-                    this.showScene('documentReview');
+            checkTimecardOutcome() {
+                const randomValue = Math.random();
+                if (randomValue < 0.8) { // 80%の確率で問題なし
+                    this.showScene('timecardNoIssue');
                 } else {
-                    this.showScene('end');
+                    this.showScene('timecardIssueFound');
                 }
             }
 
